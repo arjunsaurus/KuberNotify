@@ -2,13 +2,10 @@ const express = require('express');
 const app = express();
 const fs = require('fs');
 const port = 3000;
-const apiRouter = require("./api.js");
 const k8s = require('@kubernetes/client-node');
 const fetch = require('node-fetch');
 const yaml = require('js-yaml');
 const path = require("path");
-
-const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 
 //we have to install node-fetch because fetch is not built into node by default, the browser on the front end has it built in though
 // Initialize Kubernetes API client
@@ -16,7 +13,28 @@ const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
 
+const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
+
+
+
 app.use(express.json());
+
+const manifestChecker = async () => {
+
+  // Create an instance of the KubernetesObjectApi
+  const k8sApi = kc.makeApiClient(k8s.KubernetesObjectApi);
+  try {
+    // Try to get the existing resource
+    const manny = await k8sApi.read(yaml.loadAll(fs.readFileSync(path.resolve(__dirname, './ServiceAccountCreation.yaml'), 'utf8')));
+    console.log(manny)
+  } catch (error) {
+      console.log(error)
+  }
+};
+
+manifestChecker();
+
+
 
 //apply the ServiceAccountCreation.yaml file using 'kubectly apply -f <file-name.yaml>
 //then specify this Service Account in the application's Pod template
@@ -58,7 +76,7 @@ async function applyKubernetesObject(yamlPath) {
 
 // call and apply the Service Account Creation file
 
-applyKubernetesObject('../ServiceAccountCreation.yaml');
+// applyKubernetesObject('./ServiceAccountCreation.yaml');
 
 
 
@@ -71,7 +89,8 @@ async function checkMetricsServer() {
 
   try {
     const result = await api.getAPIResources();
-    const metricsAPI = result.body.groups.find(group => group.name === 'metrics.k8s.io');
+    console.log('result: ', result.body)
+    const metricsAPI = result.body.find(group => group.name === 'metrics.k8s.io');
 
     if (metricsAPI) {
       console.log("Metrics Server is installed.");
@@ -86,7 +105,8 @@ async function checkMetricsServer() {
   }
 }
 
-//this calls the above function and returns true or false, if it's false, it should install it
+
+// this calls the above function and returns true or false, if it's false, it should install it
 if (!checkMetricsServer()) {
   //install metrics server
   //this function applies an obj to the kubernetes cluster (in this case it's what's in the yaml file)
@@ -104,7 +124,7 @@ if (!checkMetricsServer()) {
       }
     }
   }
-  //this function gets the yaml file from the metrics server git hub, parses and stores it in local memory, then calls the above function to apply it
+  // this function gets the yaml file from the metrics server git hub, parses and stores it in local memory, then calls the above function to apply it
   async function installMetricsServer() {
     try {
       // Fetch the Metrics Server YAML manifest from GitHub
@@ -187,7 +207,6 @@ app.get('/', (req, res) => {
   res.send('Hello, Kubernetes world!');
 });
 
-app.use("/api", apiRouter);
 
 //global error handler
 app.use((err, req, res, next) => {
